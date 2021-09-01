@@ -1,0 +1,80 @@
+esphome:
+  name: switchmate
+  platform: ESP32
+  board: nodemcu-32s
+  
+  includes:
+    - switchmate.h
+
+# Enable logging
+logger:
+  level: DEBUG
+  logs:
+    sensor: INFO
+
+# Enable Home Assistant API
+api:
+
+ota:
+  password: "super_secure_password"
+
+wifi:
+  ssid: "clever_wifi_name"
+  password: "some_typable_password"
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "Switchmate Fallback Hotspot"
+    password: "whatever"
+
+captive_portal:
+
+status_led:
+  pin: GPIO2
+
+esp32_ble_tracker:
+
+ble_client:
+  # You can find these through the Switchmate app
+  - mac_address: AA:BB:CC:DD:EE:FF
+    id: lights_client
+  - mac_address: DE:AD:BE:EF:CA:FE
+    id: fan_client
+    
+custom_component:
+- lambda: |-
+    return { 
+      new SwitchmateController("Lights (Controller)", false, 1000, lights_client),
+      new SwitchmateController("Fan (Controller)", false, 1000, fan_client)
+    };
+  components:
+  - id: lights_controller
+  - id: fan_controller
+    
+switch:
+- platform: custom
+  lambda: |-
+    return { 
+      ((SwitchmateController*)lights_controller)->state_switch,
+      ((SwitchmateController*)fan_controller)->state_switch
+    };
+  switches:
+  - name: "Lights"
+    icon: "mdi:lightbulb-group"
+  - name: "Fan"
+    icon: "mdi:fan"
+
+sensor:
+  - platform: custom
+    lambda: |-
+      return { 
+        ((SwitchmateController*)lights_controller)->battery_sensor,
+        ((SwitchmateController*)fan_controller)->battery_sensor
+      };
+    sensors:
+    - name: "Lights (Battery Level)"
+      icon: 'mdi:battery'
+      unit_of_measurement: '%'
+    - name: "Fan (Battery Level)"
+      icon: 'mdi:battery'
+      unit_of_measurement: '%'
