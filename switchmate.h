@@ -36,14 +36,16 @@ class SwitchmateSwitch : public Switch {
     }
 };
 
-class SwitchmateController : public Nameable, public PollingComponent, public BLEClientNode, public SwitchmateSwitchController {
+class SwitchmateController : public PollingComponent, public BLEClientNode, public SwitchmateSwitchController {
   public:
     explicit SwitchmateController(
-            const std::string &name, 
+            const std::string &name,
             bool notify,
             uint32_t update_interval,
             BLEClient *client
-    ) : Nameable(name), PollingComponent(update_interval) {
+    ) : PollingComponent(update_interval) {
+        this->name = name;
+        
         this->notify = notify;
 
         battery_sensor = new Sensor();
@@ -51,6 +53,8 @@ class SwitchmateController : public Nameable, public PollingComponent, public BL
 
         client->register_ble_node(this);
     }
+    
+    std::string name;
 
     bool notify;
 
@@ -67,7 +71,7 @@ class SwitchmateController : public Nameable, public PollingComponent, public BL
     bool state_established = false;
 
     void write_switch_state(bool state) {
-        if (this->node_state != espbt::ClientState::Established) {
+        if (this->node_state != espbt::ClientState::ESTABLISHED) {
 	    ESP_LOGW(TAG, "[%s] Cannot write state, not connected.", this->get_name().c_str());
             return;
         }
@@ -90,14 +94,14 @@ class SwitchmateController : public Nameable, public PollingComponent, public BL
     }
 
     void update() override {
-	if (this->node_state != espbt::ClientState::Established) {
-	    ESP_LOGW(TAG, "[%s] Cannot poll, not connected.", this->get_name().c_str());
-	    return;
-	}
+        if (this->node_state != espbt::ClientState::ESTABLISHED) {
+            ESP_LOGW(TAG, "[%s] Cannot poll, not connected.", this->get_name().c_str());
+            return;
+        }
 
-	if (battery_handle == 0) {
-	    ESP_LOGW(TAG, "[%s] Cannot poll battery level, service or characteristic not found.", this->get_name().c_str());
-	} else {
+        if (battery_handle == 0) {
+            ESP_LOGW(TAG, "[%s] Cannot poll battery level, service or characteristic not found.", this->get_name().c_str());
+        } else {
             auto status =
                 esp_ble_gattc_read_char(this->parent()->gattc_if, this->parent()->conn_id, battery_handle, ESP_GATT_AUTH_REQ_NONE);
             if (status) {
@@ -193,7 +197,7 @@ class SwitchmateController : public Nameable, public PollingComponent, public BL
             }
 
             if (battery_established && state_established) {
-                this->node_state = espbt::ClientState::Established;
+                this->node_state = espbt::ClientState::ESTABLISHED;
             }
             if (battery_warning || state_warning) {
                 this->status_set_warning();
@@ -235,6 +239,8 @@ class SwitchmateController : public Nameable, public PollingComponent, public BL
             if (!battery_warning) {
                 this->status_clear_warning();
             }
+            
+            this->update();
                 
             break;
         }
@@ -265,7 +271,7 @@ class SwitchmateController : public Nameable, public PollingComponent, public BL
             }
 
             if (battery_established && state_established) {
-                this->node_state = espbt::ClientState::Established;
+                this->node_state = espbt::ClientState::ESTABLISHED;
             }
             break;
         }
@@ -276,6 +282,10 @@ class SwitchmateController : public Nameable, public PollingComponent, public BL
         if (state_warning || battery_warning) {
             this->status_set_warning();
         }
+    }
+    
+    std::string get_name() {
+        return name;
     }
     
     // I have no idea what this is
