@@ -45,7 +45,7 @@ class SwitchmateController : public PollingComponent, public BLEClientNode, publ
             BLEClient *client
     ) : PollingComponent(update_interval) {
         this->name = name;
-        
+
         this->notify = notify;
 
         battery_sensor = new Sensor();
@@ -53,7 +53,7 @@ class SwitchmateController : public PollingComponent, public BLEClientNode, publ
 
         client->register_ble_node(this);
     }
-    
+
     std::string name;
 
     bool notify;
@@ -72,16 +72,16 @@ class SwitchmateController : public PollingComponent, public BLEClientNode, publ
 
     void write_switch_state(bool state) {
         if (this->node_state != espbt::ClientState::ESTABLISHED) {
-	    ESP_LOGW(TAG, "[%s] Cannot write state, not connected.", this->get_name().c_str());
+            ESP_LOGW(TAG, "[%s] Cannot write state, not connected.", this->get_name().c_str());
             return;
         }
         if (state_handle == 0) {
-	    ESP_LOGW(TAG, "[%s] Cannot write state, service or characteristic not found.", this->get_name().c_str());
+            ESP_LOGW(TAG, "[%s] Cannot write state, service or characteristic not found.", this->get_name().c_str());
             return;
         }
 
         auto status =
-            esp_ble_gattc_write_char(this->parent()->gattc_if, this->parent()->conn_id, state_handle, 
+            esp_ble_gattc_write_char(this->parent()->get_gattc_if(), this->parent()->get_conn_id(), state_handle,
                     1, state ? STATE_VAL_ON : STATE_VAL_OFF, ESP_GATT_WRITE_TYPE_RSP, ESP_GATT_AUTH_REQ_NONE);
         if (status) {
             //state_warning = true;
@@ -103,7 +103,7 @@ class SwitchmateController : public PollingComponent, public BLEClientNode, publ
             ESP_LOGW(TAG, "[%s] Cannot poll battery level, service or characteristic not found.", this->get_name().c_str());
         } else {
             auto status =
-                esp_ble_gattc_read_char(this->parent()->gattc_if, this->parent()->conn_id, battery_handle, ESP_GATT_AUTH_REQ_NONE);
+                esp_ble_gattc_read_char(this->parent()->get_gattc_if(), this->parent()->get_conn_id(), battery_handle, ESP_GATT_AUTH_REQ_NONE);
             if (status) {
 
                 battery_warning = true;
@@ -117,7 +117,7 @@ class SwitchmateController : public PollingComponent, public BLEClientNode, publ
             ESP_LOGW(TAG, "[%s] Cannot poll state, service or characteristic not found.", this->get_name().c_str());
         } else {
             auto status =
-                esp_ble_gattc_read_char(this->parent()->gattc_if, this->parent()->conn_id, state_handle, ESP_GATT_AUTH_REQ_NONE);
+                esp_ble_gattc_read_char(this->parent()->get_gattc_if(), this->parent()->get_conn_id(), state_handle, ESP_GATT_AUTH_REQ_NONE);
             if (status) {
 
                 state_warning = true;
@@ -126,7 +126,7 @@ class SwitchmateController : public PollingComponent, public BLEClientNode, publ
                 ESP_LOGW(TAG, "[%s] Error sending read request for state, status=%d.", this->get_name().c_str(), status);
             }
         }
-    
+
         if (battery_warning || state_warning) {
             this->status_set_warning();
         }
@@ -143,7 +143,7 @@ class SwitchmateController : public PollingComponent, public BLEClientNode, publ
         }
         case ESP_GATTC_DISCONNECT_EVT: { // Disconnection event
             ESP_LOGW(TAG, "[%s] Disconnected!", this->get_name().c_str());
-            
+
             battery_warning = true;
             battery_sensor->publish_state(NAN);
 
@@ -158,7 +158,7 @@ class SwitchmateController : public PollingComponent, public BLEClientNode, publ
             auto battery_chr = this->parent()->get_characteristic(BATTERY_SERVICE_UUID, BATTERY_CHAR_UUID);
             if (battery_chr == nullptr) {
                 battery_warning = true;
-                battery_sensor->publish_state(NAN); 
+                battery_sensor->publish_state(NAN);
                 ESP_LOGW(TAG, "[%s] Battery level characteristic not found at service %s char %s.", this->get_name().c_str(),
                     BATTERY_SERVICE_UUID.to_string().c_str(), BATTERY_CHAR_UUID.to_string().c_str());
             } else {
@@ -166,7 +166,7 @@ class SwitchmateController : public PollingComponent, public BLEClientNode, publ
 
                 if (this->notify) {
                     auto status =
-                        esp_ble_gattc_register_for_notify(this->parent()->gattc_if, this->parent()->remote_bda, battery_chr->handle);
+                        esp_ble_gattc_register_for_notify(this->parent()->get_gattc_if(), this->parent()->get_remote_bda(), battery_chr->handle);
                     if (status) {
                         ESP_LOGW(TAG, "[%s] esp_ble_gattc_register_for_notify failed for battery level, status=%d.", this->get_name().c_str(), status);
                     }
@@ -187,7 +187,7 @@ class SwitchmateController : public PollingComponent, public BLEClientNode, publ
 
                 if (this->notify) {
                     auto status =
-                        esp_ble_gattc_register_for_notify(this->parent()->gattc_if, this->parent()->remote_bda, state_chr->handle);
+                        esp_ble_gattc_register_for_notify(this->parent()->get_gattc_if(), this->parent()->get_remote_bda(), state_chr->handle);
                     if (status) {
                         ESP_LOGW(TAG, "[%s] esp_ble_gattc_register_for_notify failed for state, status=%d.", this->get_name().c_str(), status);
                     }
@@ -205,7 +205,7 @@ class SwitchmateController : public PollingComponent, public BLEClientNode, publ
             break;
         }
         case ESP_GATTC_READ_CHAR_EVT: { // Read characteristic
-            if (param->read.conn_id != this->parent()->conn_id)
+            if (param->read.conn_id != this->parent()->get_conn_id())
                 break;
             if (param->read.status != ESP_GATT_OK) {
                 ESP_LOGW(TAG, "[%s] Error reading char at handle %d, status=%d.", this->get_name().c_str(), param->read.handle, param->read.status);
@@ -227,25 +227,25 @@ class SwitchmateController : public PollingComponent, public BLEClientNode, publ
             break;
         }
         case ESP_GATTC_WRITE_CHAR_EVT: { // Wrote characteristic
-            if (param->write.conn_id != this->parent()->conn_id || param->write.handle != state_handle)
+            if (param->write.conn_id != this->parent()->get_conn_id() || param->write.handle != state_handle)
                 break;
             if (param->write.status != ESP_GATT_OK) {
                 ESP_LOGW(TAG, "[%s] Error writing char at handle %d, status=%d.", this->get_name().c_str(), param->write.handle, param->write.status);
                 break;
-            } 
+            }
 
             ESP_LOGD(TAG, "[%s] Successfully wrote state.", this->get_name().c_str());
             state_warning = false;
             if (!battery_warning) {
                 this->status_clear_warning();
             }
-            
+
             this->update();
-                
+
             break;
         }
         case ESP_GATTC_NOTIFY_EVT: { // Got notified
-            if (param->notify.conn_id != this->parent()->conn_id)
+            if (param->notify.conn_id != this->parent()->get_conn_id())
                 break;
 
             if (param->notify.handle == battery_handle) {
@@ -283,11 +283,11 @@ class SwitchmateController : public PollingComponent, public BLEClientNode, publ
             this->status_set_warning();
         }
     }
-    
+
     std::string get_name() {
         return name;
     }
-    
+
     // I have no idea what this is
     uint32_t hash_base() { return 2345872354UL; }
 };
